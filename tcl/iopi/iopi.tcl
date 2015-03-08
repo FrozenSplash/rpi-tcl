@@ -191,11 +191,11 @@ namespace eval ::iopi {
 		switch -exact -- $port {
 			0 {
 				set ::iopi::port_a_dir $direction
-				return [::iopi::write $smbus ::iopi::IODIRA $direction]
+				return [::iopi::write $smbus $::iopi::IODIRA $direction]
 			}
 			1 {
 				set ::iopi::port_b_dir $direction
-				return [::iopi::write $smbus ::iopi::IODIRB $direction]
+				return [::iopi::write $smbus $::iopi::IODIRB $direction]
 			}
 			default {
 				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
