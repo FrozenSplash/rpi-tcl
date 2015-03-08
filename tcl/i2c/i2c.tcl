@@ -22,10 +22,10 @@
 package provide i2c 1.0
 
 if { [catch {
-	load "$::env(HOME)/tcl/i2c/i2c.so i2c"
+	load "$::env(HOME)/rpi-tcl/tcl/i2c/i2c.so i2c"
 } error_msg]} {
 	if { [catch {
-		load "$::env(HOME)/Pi/tcl/i2c/i2c.so i2c"
+		load "$::env(HOME)/tcl/i2c/i2c.so i2c"
 	} error_msg]} {
 		error "Unable to load i2c.so file."
 	}
