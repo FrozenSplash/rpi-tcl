@@ -191,11 +191,11 @@ namespace eval ::iopi {
 		switch -exact -- $port {
 			0 {
 				set ::iopi::port_a_dir $direction
-				return [::iopi::write $smbus ::iopi::IODIRA $direction]
+				return [::iopi::write $smbus $::iopi::IODIRA $direction]
 			}
 			1 {
 				set ::iopi::port_b_dir $direction
-				return [::iopi::write $smbus ::iopi::IODIRB $direction]
+				return [::iopi::write $smbus $::iopi::IODIRB $direction]
 			}
 			default {
 				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
@@ -234,11 +234,11 @@ namespace eval ::iopi {
 		switch -exact -- $port {
 			0 {
 				set ::iopi::porta_pullup $value
-				return [::iopi::write $smbus ::iopi::GPPUA $value]
+				return [::iopi::write $smbus $::iopi::GPPUA $value]
 			}
 			1 {
 				set ::iopi::portb_pullup $value
-				return [::iopi::write $smbus ::iopi::GPPUB $value]
+				return [::iopi::write $smbus $::iopi::GPPUB $value]
 			}
 			default {
 				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
@@ -276,11 +276,11 @@ namespace eval ::iopi {
 		switch -exact -- $port {
 			0 {
 				set ::iopi::portaval $value
-				return [::iopi::write $smbus ::iopi::GPIOA $value]
+				return [::iopi::write $smbus $::iopi::GPIOA $value]
 			}
 			1 {
 				set ::iopi::portbval $value
-				return [::iopi::write $smbus ::iopi::GPIOB $value]
+				return [::iopi::write $smbus $::iopi::GPIOB $value]
 			}
 			default {
 				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
