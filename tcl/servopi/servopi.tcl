@@ -67,12 +67,17 @@ namespace eval ::servopi {
     # Set the PWM frequency
     proc set_pwm_freq { smbus freq } {
         
-        set scale_val 25000000.0;                       # 25MHz
+        set scale_val 2500000.0;                        # 2.5MHz
         set scale_val [expr $scale_val / 4096.0];       # 12-bit
         set scale_val [expr $scale_val / double($freq)]
         set scale_val [expr $scale_val - 1.0]
         set pre_scale [expr floor(${scale_val} + 0.5)]
         
+		if { $pre_scale < 0.0 } {
+			set pre_scale 0.0
+			puts "Warning: Calculated PRE_SCALE value is negative, defaulting to 0.0"
+		}
+		
         set old_mode [::servopi::read $smbus $::servopi::MODE1]
         if { $old_mode == -1 } { return false }
         
