@@ -44,11 +44,14 @@ namespace eval ::servopi {
     set ALL_LED_OFF_H   0xFD
     set PRE_SCALE       0xFE
     
+	# Variables
+	set address 		0x40	;# I2C address
+	
     # Define PWM package global variables
     set use_gpio        false
     
     # Setup i2c address, default is 0x40 for ServoPi board
-    proc setup_bus { bus_id { address 0x40 } { gpio false }} {
+    proc setup_bus { bus_id { address $::servopi::address } { gpio false }} {
         
         set smbus [::smbus::setup_bus $bus_id $address]
         
@@ -99,6 +102,19 @@ namespace eval ::servopi {
         ::servopi::write $smbus [expr $::servopi::LED0_ON_H  + 4 * $channel] [expr $on  >> 8]
         ::servopi::write $smbus [expr $::servopi::LED0_OFF_L + 4 * $channel] [expr $off & 0xFF]
         ::servopi::write $smbus [expr $::servopi::LED0_OFF_H + 4 * $channel] [expr $off >> 8]
+    }
+    
+    # Get the output on a single channel
+    proc get_pwm { smbus channel } {
+        
+		set on [expr \
+			 ::servopi::read $smbus [expr $::servopi::LED0_ON_L  + 4 * $channel] + \
+			(::servopi::read $smbus [expr $::servopi::LED0_ON_H  + 4 * $channel] << 8)]
+		set off [expr \
+			::servopi::read $smbus [expr $::servopi::LED0_OFF_L + 4 * $channel] + \
+			(::servopi::read $smbus [expr $::servopi::LED0_OFF_H + 4 * $channel] << 8)]
+		
+		return [list on off]
     }
     
     # Set the output on all channels

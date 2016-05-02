@@ -113,19 +113,21 @@ namespace eval ::iopi {
 		
 		if { $smbus < 0 } { return $smbus }
 		
+		::iopi::write $smbus $::iopi::IOCON $::iopi::config
+		
+#		set portaval [::iopi::read $smbus $::iopi::GPIOA]
+#		set portbval [::iopi::read $smbus $::iopi::GPIOB]
+		
 		# Init SMBus i2c address, default is 0x20, 0x21 for IOPi board,
 		# Load default configuration, all pins are inputs with pull-ups disabled
 		
-		::iopi::write $smbus $::iopi::IOCON $::iopi::config
+		# Configure both IO ports as inputs
+#		::iopi::write $smbus $::iopi::IODIRA 0xFF
+#		::iopi::write $smbus $::iopi::IODIRB 0xFF
 		
-		set portaval [::iopi::read $smbus $::iopi::GPIOA]
-		set portbval [::iopi::read $smbus $::iopi::GPIOB]
-		
-		::iopi::write $smbus $::iopi::IODIRA 0xFF
-		::iopi::write $smbus $::iopi::IODIRB 0xFF
-		
-		::iopi::set_port_pullups $smbus 0 0x00
-		::iopi::set_port_pullups $smbus 1 0x00
+		# Disable pull-ups on both IO ports
+#		::iopi::set_port_pullups $smbus A 0x00
+#		::iopi::set_port_pullups $smbus B 0x00
 		
 		if { $gpio == true } {
 			package require gpio 1.0
@@ -157,7 +159,7 @@ namespace eval ::iopi {
 	# Set IO direction for an individual pin
 	proc set_pin_direction { smbus pin direction } {
 		# Pins 1 to 16
-		# Direction 1 = Input, 0 = Output
+		# Direction 0 = Output, 1 = Input
 		 
 		if { $direction != 0 && $direction != 1 } {
 			error "Invalid direction specified \[$direction\], should be either \[0\] (Output) or \[1\] (Input)."
@@ -181,24 +183,24 @@ namespace eval ::iopi {
 	
 	# Set direction for an IO port
 	proc set_port_direction  { smbus port direction } {
-		# Port 0 = Pins 1 to 8, Port 1 = Pins 8 to 16
-		# Direction 1 = Input, 0 = Output
+		# Port A = Pins 1 to 8, Port B = Pins 8 to 16
+		# Direction 0 = Output & 1 = Input per Pin, 0x00 - 0xFF
 		
-		if { $direction != 0 && $direction != 1 } {
-			error "Invalid direction specified \[$direction\], should be either \[0\] (Output) or \[1\] (Input)."
+		if { $direction < 0x00 || $direction > 0xFF } {
+			error "Invalid direction specified \[$direction\], should be either \[0\] (Output) or \[1\] (Input) per pin, therefore 0x00 to 0xFF."
 		}
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				set ::iopi::port_a_dir $direction
 				return [::iopi::write $smbus $::iopi::IODIRA $direction]
 			}
-			1 {
+			B {
 				set ::iopi::port_b_dir $direction
 				return [::iopi::write $smbus $::iopi::IODIRB $direction]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -208,7 +210,7 @@ namespace eval ::iopi {
 	# Set the internal 100K pull-up resistors for an individual pin
 	proc set_pin_pullup { smbus pin value } {
 		# Pins 1 to 16
-		# Value 1 = enabled, 0 = disabled
+		# Value 0 = disabled, 1 = enabled
 		
 		set pin [expr $pin - 1]
 		if { $pin >= 0 && $pin <= 7 } {
@@ -228,20 +230,20 @@ namespace eval ::iopi {
 	
 	# Set the internal 100K pull-up resistors for the selected IO port
 	proc set_port_pullups { smbus port value } {
-		# Port 0 = Pins 1 to 8, Port 1 = Pins 8 to 16
-		# Value 1 = enabled, 0 = disabled
+		# Port A = Pins 1 to 8, Port B = Pins 8 to 16
+		# Value 0 = disabled & 1 = enabled per pin, 0x00 - 0xFF
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				set ::iopi::porta_pullup $value
 				return [::iopi::write $smbus $::iopi::GPPUA $value]
 			}
-			1 {
+			B {
 				set ::iopi::portb_pullup $value
 				return [::iopi::write $smbus $::iopi::GPPUB $value]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -252,13 +254,14 @@ namespace eval ::iopi {
 	proc write_pin { smbus pin value } {
 		# Pins 1 to 16
 		
-		set pin [expr $pin - 1]
-		if { $pin >= 0 && $pin <= 7 } {
-			set ::iopi::portaval [::iopi::update_byte $::iopi::portaval $pin $value]
+		if { $pin >= 1 && $pin <= 8 } {
+			set io_pin [expr $pin - 1]
+			set ::iopi::portaval [::iopi::update_byte $::iopi::portaval $io_pin $value]
 			return [::iopi::write $smbus $::iopi::GPIOA $::iopi::portaval]
 		
-		} elseif { $pin >= 8 && $pin <= 16 } {
-			set ::iopi::portbval [::iopi::update_byte $::iopi::portbval [expr $pin - 8] $value]
+		} elseif { $pin >= 9 && $pin <= 16 } {
+			set io_pin [expr $pin - 1 - 8]
+			set ::iopi::portbval [::iopi::update_byte $::iopi::portbval $io_pin $value]
 			return [::iopi::write $smbus $::iopi::GPIOB $::iopi::portbval]
 		
 		} else {
@@ -270,20 +273,20 @@ namespace eval ::iopi {
 	
 	# Write to all pins on the selected port
 	proc write_port { smbus port value } {
-		# Port 0 = Pins 1 to 8, Port 1 = Pins 8 to 16
+		# Port A = Pins 1 to 8, Port B = Pins 9 to 16
 		# Value = number between 0 and 255 or 0x00 and 0xFF
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				set ::iopi::portaval $value
 				return [::iopi::write $smbus $::iopi::GPIOA $value]
 			}
-			1 {
+			B {
 				set ::iopi::portbval $value
 				return [::iopi::write $smbus $::iopi::GPIOB $value]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -295,14 +298,15 @@ namespace eval ::iopi {
 		# Pins 1 to 16
 		# Returns 0 = logic level low, 1 = logic level high
 		
-		set pin [expr $pin - 1]
-		if { $pin >= 0 && $pin <= 7 } {
+		if { $pin >= 1 && $pin <= 8 } {
+			set io_pin [expr $pin - 1]
 			set ::iopi::portaval [::iopi::read $smbus $::iopi::GPIOA]
-			return [::iopi::check_bit $::iopi::portaval $pin]
+			return [::iopi::check_bit $::iopi::portaval $io_pin]
 		
-		} elseif { $pin >= 8 && $pin <= 16 } {
+		} elseif { $pin >= 9 && $pin <= 16 } {
+			set io_pin [expr $pin - 1 - 8]
 			set ::iopi::portbval [::iopi::read $smbus $::iopi::GPIOB]
-			return [::iopi::check_bit $::iopi::portbval $pin]
+			return [::iopi::check_bit $::iopi::portbval $io_pin]
 		
 		} else {
 			error "Invalid pin specified \[$pin\], should be between \[1\] and \[16\]."
@@ -313,20 +317,20 @@ namespace eval ::iopi {
 	
 	# Read all pins on the selected port
 	proc read_port { smbus port } {
-		# Port 0 = pins 1 to 8, port 1 = pins 8 to 16
+		# Port A = pins 1 to 8, port B = pins 8 to 16
 		# Returns number between 0 and 255 or 0x00 and 0xFF
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				set ::iopi::portaval [::iopi::read $smbus $::iopi::GPIOA]
 				return $::iopi::portaval
 			}
-			1 {
+			B {
 				set ::iopi::portbval [::iopi::read $smbus $::iopi::GPIOB]
 				return $::iopi::portbval
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -338,13 +342,14 @@ namespace eval ::iopi {
 		# Pins 1 to 16
 		# Polarity 0 = same logic state of the input pin, 1 = inverted logic state of the input pin
 		
-		set pin [expr $pin - 1]
-		if { $pin >= 0 && $pin <= 7 } {
-			set ::iopi::porta_polarity [::iopi::update_byte $::iopi::porta_polarity $pin $polarity]
+		if { $pin >= 1 && $pin <= 8 } {
+			set io_pin [expr $pin - 1]
+			set ::iopi::porta_polarity [::iopi::update_byte $::iopi::porta_polarity $io_pin $polarity]
 			return [::iopi::write $smbus $::iopi::IPOLA $::iopi::porta_polarity]
 		
-		} elseif { $pin >= 8 && $pin <= 16 } {
-			set ::iopi::portb_polarity [::iopi::update_byte $::iopi::portb_polarity [expr $pin - 8] $polarity]
+		} elseif { $pin >= 9 && $pin <= 16 } {
+			set io_pin [expr $pin - 1 - 8]
+			set ::iopi::portb_polarity [::iopi::update_byte $::iopi::portb_polarity $io_pin $polarity]
 			return [::iopi::write $smbus $::iopi::IPOLB $::iopi::portb_polarity]
 		
 		} else {
@@ -356,21 +361,21 @@ namespace eval ::iopi {
 	
 	# invert the polarity of the pins on a selected port
 	proc invert_port { smbus port polarity } {
-		# Port 0 = pins 1 to 8, port 1 = pins 8 to 16
+		# Port A = pins 1 to 8, port B = pins 8 to 16
 		# Polarity 0 = same logic state of the input pin, 1 = inverted logic state of the input pin
 		# Polarity Value = number between 0 and 255 or 0x00 and 0xFF
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				set ::iopi::porta_polarity $polarity
 				return [::iopi::write $smbus $::iopi::IPOLA $polarity]
 			}
-			1 {
+			B {
 				set ::iopi::portb_polarity $polarity
 				return [::iopi::write $smbus $::iopi::IPOLB $polarity]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -408,19 +413,20 @@ namespace eval ::iopi {
 	
 	# Set the type of interrupt for each pin on the selected port
 	proc set_interrupt_type { smbus port value } {
+		# Port A = pins 1 to 8, port B = pins 8 to 16
 		# Value 1 = interrupt is fired when the pin matches the default value
 		# Value 0 = the interrupt is fired on state change
-		# Interupt Value = number between 0 and 255 or 0x00 and 0xFF
+		# Interrupt Value = number between 0 and 255 or 0x00 and 0xFF
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				return [::iopi::write $smbus $::iopi::INTCONA $value]
 			}
-			1 {
+			B {
 				return [::iopi::write $smbus $::iopi::INTCONB $value]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -429,19 +435,20 @@ namespace eval ::iopi {
 	
 	# Set interupt compare bits
 	proc set_interrupt_defaults { smbus port value } {
+		# Port A = pins 1 to 8, port B = pins 8 to 16
 		# These bits set the compare value for pins configured for interrupt-on-change on the selected port.
 		# If the associated pin level is the opposite from the register bit, an interrupt occurs.
-		# Interupt Compare Value = number between 0 and 255 or 0x00 and 0xFF
+		# Interrupt Compare Value = number between 0 and 255 or 0x00 and 0xFF
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				return [::iopi::write $smbus $::iopi::DEFVALA $value]
 			}
-			1 {
+			B {
 				return [::iopi::write $smbus $::iopi::DEFVALB $value]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -453,13 +460,14 @@ namespace eval ::iopi {
 		# Pins 1 to 16
 		# Value 0 = interrupt disabled, 1 = interrupt enabled
 		
-		set pin [expr $pin - 1]
-		if { $pin >= 0 && $pin <= 7 } {
-			set ::iopi::intA [::iopi::update_byte $::iopi::intA $pin $value]
+		if { $pin >= 1 && $pin <= 8 } {
+			set io_pin [expr $pin - 1]
+			set ::iopi::intA [::iopi::update_byte $::iopi::intA $io_pin $value]
 			return [::iopi::write $smbus $::iopi::GPINTENA $::iopi::intA]
 		
-		} elseif { $pin >= 8 && $pin <= 16 } {
-			set ::iopi::intB [::iopi::update_byte $::iopi::intB $pin $value]
+		} elseif { $pin >= 9 && $pin <= 16 } {
+			set io_pin [expr $pin - 1 - 8]
+			set ::iopi::intB [::iopi::update_byte $::iopi::intB $io_pin $value]
 			return [::iopi::write $smbus $::iopi::GPINTENB $::iopi::intB]
 		
 		} else {
@@ -471,20 +479,20 @@ namespace eval ::iopi {
 	
 	# Enable interrupts for the pins on the selected port
 	proc set_interrupt_on_port { smbus port value } {
-		# Port 0 = pins 1 to 8, port 1 = pins 8 to 16
+		# Port A = pins 1 to 8, port B = pins 8 to 16
 		# Interupt Value = number between 0 and 255 or 0x00 and 0xFF
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				set ::iopi::intA $value
 				return [::iopi::write $smbus $::iopi::GPINTENA $value]
 			}
-			1 {
+			B {
 				set ::iopi::intB $value
 				return [::iopi::write $smbus $::iopi::GPINTENB $value]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -493,17 +501,17 @@ namespace eval ::iopi {
 	
 	# Read the interrupt status for the pins on the selected port
 	proc read_interrupt_status { smbus port } {
-		# Port 0 = pins 1 to 8, port 1 = pins 8 to 16
+		# Port A = pins 1 to 8, port B = pins 8 to 16
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				return [::iopi::read $smbus $::iopi::INTFA]
 			}
-			1 {
+			B {
 				return [::iopi::read $smbus $::iopi::INTFB]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
@@ -512,17 +520,17 @@ namespace eval ::iopi {
 	
 	# Read the value from the selected port at the time of the last interrupt trigger
 	proc read_interrupt_capture { smbus port } {
-		# Port 0 = pins 1 to 8, port 1 = pins 8 to 16
+		# Port A = pins 1 to 8, port B = pins 8 to 16
 		
 		switch -exact -- $port {
-			0 {
+			A {
 				return [::iopi::read $smbus $::iopi::INTCAPA]
 			}
-			1 {
+			B {
 				return [::iopi::read $smbus $::iopi::INTCAPB]
 			}
 			default {
-				error "Invalid port specified \[$port\], should be either \[0\] or \[1\]."
+				error "Invalid port specified \[$port\], should be either \[A\] or \[B\]."
 			}
 		}
 		
